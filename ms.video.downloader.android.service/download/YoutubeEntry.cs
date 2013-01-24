@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using ms.video.downloader.android.service.msYoutube;
 
@@ -9,6 +8,7 @@ namespace ms.video.downloader.android.service.download
     public delegate void EntriesReady(ObservableCollection<Feed> entries);
 
     public delegate void EntryDownloadStatusEventHandler(Feed feed, DownloadState downloadState, double percentage);
+    public delegate void EntryDownloadAvailableEventHandler(YoutubeEntry feed, VideoInfo videoInfo, MediaType mediaType);
 
     public class YoutubeEntry : Feed
     {
@@ -26,6 +26,8 @@ namespace ms.video.downloader.android.service.download
         public MediaType MediaType { get; set; }
         public string ChannelName { get { return Parent == null ? "" : Parent.Title; } }
         public EntryDownloadStatusEventHandler OnEntryDownloadStatusChange;
+        public EntryDownloadAvailableEventHandler OnEntryDownloadAvailable;
+
         public Uri Uri
         {
             get { return _uri; }
@@ -38,98 +40,26 @@ namespace ms.video.downloader.android.service.download
             _settings = new MSYoutubeSettings( "MS.Youtube.Downloader", "AI39si76x-DO4bui7H1o0P6x8iLHPBvQ24exnPiM8McsJhVW_pnCWXOXAa1D8-ymj0Bm07XrtRqxBC7veH6flVIYM7krs36kQg" ) {AutoPaging = true, PageSize = 50};
         }
 
-        #region Convert to MP3
+        //public void DownloadAsync(MediaType mediaType, bool ignore)
+        //{
+        //    if (ExecutionStatus == ExecutionStatus.Deleted) { Delete(); return; }
+        //    MediaType = mediaType;
+        //    VideoInfo videoInfo = null;
+        //    try {
+        //        var videoInfos = DownloadHelper.GetDownloadUrlsAsync(Uri);
+        //        foreach (VideoInfo info in videoInfos)
+        //            if (info.VideoType == VideoType.Mp4 && info.Resolution == 360) { videoInfo = info; break; }
+        //    } catch {
+        //        videoInfo = null;
+        //    }
+        //    if (videoInfo == null) { UpdateStatus(DownloadState.Error); return; }
+        //    Title = videoInfo.Title;
+        //    VideoExtension = videoInfo.VideoExtension;
+        //    if (OnEntryDownloadAvailable != null)
+        //        OnEntryDownloadAvailable(this, videoInfo, MediaType);
+        //}
 
-
-        #endregion
-
-        #region GetEntries
-        public void GetEntries(EntriesReady onEntriesReady, MSYoutubeLoading onYoutubeLoading = null)
-        {
-            if(YoutubeUrl.Type == VideoUrlType.Channel || YoutubeUrl.ChannelId != "" || YoutubeUrl.FeedId != "")
-                FillEntriesChannel(onEntriesReady, onYoutubeLoading);
-            else if(YoutubeUrl.Type == VideoUrlType.User)
-                FillEntriesUser(onEntriesReady, onYoutubeLoading);
-        }
-
-        private void FillEntriesUser(EntriesReady onEntriesReady, MSYoutubeLoading onYoutubeLoading)
-        {
-            var youtubeUrl = YoutubeUrl;
-            var request = new MSYoutubeRequest(_settings);
-            var uri = new Uri(String.Format("https://gdata.youtube.com/feeds/api/users/{0}/playlists?v=2", youtubeUrl.UserId));
-            var items = request.GetAsync(YoutubeUrl, uri, onYoutubeLoading);
-            if (items == null) return;
-            Entries = new ObservableCollection<Feed>();
-            try {
-                if (!String.IsNullOrEmpty(items.AuthorId)) {
-                    var favoritesEntry = new YoutubeEntry(this) {
-                        Title = "Favorite Videos",
-                        Uri = new Uri("http://www.youtube.com/playlist?list=FL" + items.AuthorId),
-                    };
-                    Entries.Add(favoritesEntry);
-                }
-                foreach (var member in items.Entries) {
-                    var entry = new YoutubeEntry(this) {
-                        Title = member.Title,
-                        Uri = member.Uri,
-                        Description = member.Description
-                    };
-                    Entries.Add(entry);
-                }
-            } catch {
-                Entries.Clear();
-            }
-            if (onEntriesReady != null) onEntriesReady(Entries);
-        }
-
-        private void FillEntriesChannel(EntriesReady onEntriesReady, MSYoutubeLoading onYoutubeLoading)
-        {
-            var url = "";
-            if (!String.IsNullOrEmpty(YoutubeUrl.ChannelId)) 
-                url = "https://gdata.youtube.com/feeds/api/playlists/" + YoutubeUrl.ChannelId;
-            else if (!String.IsNullOrEmpty(YoutubeUrl.FeedId))
-                url = String.Format("https://gdata.youtube.com/feeds/api/users/{0}/uploads", YoutubeUrl.FeedId);
-            if (url.Length <= 0) return;
-
-            try {
-                var request = new MSYoutubeRequest(_settings);
-                var items = request.GetAsync(YoutubeUrl, new Uri(url), onYoutubeLoading);
-                if (items == null)
-                    Entries = new ObservableCollection<Feed>();
-                else {
-                    if (String.IsNullOrEmpty(Title)) Title = items.Title;
-                    Entries = GetMembers(items);
-                }
-            } catch {
-                Entries = new ObservableCollection<Feed>();
-            }
-            if (onEntriesReady != null) onEntriesReady(Entries);
-        }
-
-        private ObservableCollection<Feed> GetMembers(MSYoutubeEntry items)
-        {
-            var entries = new ObservableCollection<Feed>();
-            foreach (var member in items.Entries) {
-                if (member.Uri == null) continue;
-                var thumbnailUrl = "";
-                var thumbnailUrls = new List<string>(member.Thumbnails.Count);
-                foreach (var tn in member.Thumbnails) {
-                    thumbnailUrls.Add(tn.Url);
-                    if (tn.Height == "90" && tn.Width == "120")
-                        thumbnailUrl = tn.Url;
-                }
-                entries.Add(new YoutubeEntry(this) {
-                    Title = member.Title,
-                    Uri = member.Uri,
-                    Description = member.Description,
-                    ThumbnailUrl = thumbnailUrl
-                });
-            }
-            return entries;
-        }
-
-        #endregion
-
+        
         public void DownloadAsync(MediaType mediaType, bool ignore)
         {
             if (ExecutionStatus == ExecutionStatus.Deleted) { Delete(); return; }
@@ -144,12 +74,14 @@ namespace ms.video.downloader.android.service.download
                 ProviderFolder = DownloadHelper.GetFolder(audioFolder, Enum.GetName(typeof(ContentProviderType), YoutubeUrl.Provider));
                 DownloadFolder = DownloadHelper.GetFolder(ProviderFolder, DownloadHelper.GetLegalPath(ChannelName));
             }
-            var videoInfos = DownloadHelper.GetDownloadUrlsAsync(Uri);
             VideoInfo videoInfo = null;
-            foreach (VideoInfo info in videoInfos) if (info.VideoType == VideoType.Mp4 && info.Resolution == 360) {
-                    videoInfo = info;
-                    break;
-                }
+            try {
+                var videoInfos = DownloadHelper.GetDownloadUrlsAsync(Uri);
+                foreach (VideoInfo info in videoInfos)
+                    if (info.VideoType == VideoType.Mp4 && info.Resolution == 360) { videoInfo = info; break; }
+            } catch {
+                videoInfo = null;
+            }
             if (videoInfo == null) { UpdateStatus(DownloadState.Error); return; }
             Title = videoInfo.Title;
             VideoExtension = videoInfo.VideoExtension;
@@ -169,7 +101,7 @@ namespace ms.video.downloader.android.service.download
             } else if (OnEntryDownloadStatusChange != null)
                 UpdateStatus(DownloadState.Ready);
         }
-
+        
         private void OnAudioConversionStatusChange(Feed feed, DownloadState downloadState, double percentage)
         {
             UpdateStatus(downloadState, percentage);

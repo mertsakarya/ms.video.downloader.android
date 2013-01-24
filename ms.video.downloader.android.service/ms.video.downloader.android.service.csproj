@@ -32,6 +32,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Mono.Android" />
     <Reference Include="mscorlib" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -51,7 +52,7 @@
     <Compile Include="download\YoutubeEntry.cs" />
     <Compile Include="download\YoutubeUrl.cs" />
     <Compile Include="Enumerations.cs" />
-    <Compile Include="LocalService.cs" />
+    <Compile Include="Settings.cs" />
     <Compile Include="msYoutube\MSYoutubeEntry.cs" />
     <Compile Include="msYoutube\MSYoutubeRequest.cs" />
     <Compile Include="msYoutube\MSYoutubeSettings.cs" />

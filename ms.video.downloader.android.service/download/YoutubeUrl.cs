@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace ms.video.downloader.android.service.download
 {
@@ -20,18 +21,17 @@ namespace ms.video.downloader.android.service.download
 
         public static YoutubeUrl Create(Uri u)
         {
-
-            var surl = u.ToString();
-            if (surl.StartsWith("https://")) {
-                surl = "http://" + surl.Substring(8);
-            } else if (!surl.StartsWith("http://")) {
-                surl = "http://" + u;
-            }
-            var url = new YoutubeUrl { Uri = u, Type = VideoUrlType.Unknown, Provider = ContentProviderType.NONE };
-            url.Parse(surl);
+            var url = new YoutubeUrl { Uri = u, Type = VideoUrlType.Unknown, Provider = ContentProviderType.Youtube, ChannelId = "", FeedId = "", Id = "", VideoId = ""};
+            var parameters = DownloadHelper.GetParams(u.Query);
+            if (parameters.Count > 0 && parameters.ContainsKey("v")) {
+                url.Id = parameters["v"];
+                url.VideoId = url.Id;
+                url.Type = VideoUrlType.Video;
+            } 
             return url;
         }
 
+        /*
         protected void Parse(string lurl)
         {
             var surl = lurl.Replace("youtu.be/", "youtube.com/watch?v=");
@@ -46,10 +46,12 @@ namespace ms.video.downloader.android.service.download
 
             var uri = new Uri(surl);
             Uri = uri;
-            if (uri.Host != "www.youtube.com") return; // throw new Exception("Invalid HOST");
-            Provider = ContentProviderType.Youtube;
-            ChannelId = GetPlaylistId(uri);
-            VideoId = GetVideoId(uri);
+            if (!uri.Host.Contains(".youtube.com")) return; // throw new Exception("Invalid HOST");
+            var parameters = DownloadHelper.GetParams(uri.Query);
+            if (parameters.Count > 0) {
+                ChannelId = GetPlaylistId(parameters);
+                VideoId = GetVideoId(parameters);
+            }
             FeedId = GetFeedId(uri);
             UserId = "";
             Id = "";
@@ -89,40 +91,17 @@ namespace ms.video.downloader.android.service.download
             return "";
         }
 
-        public static string GetVideoId(Uri uri)
+        public static string GetVideoId(Dictionary<string, string> parameters)
         {
-            var queryItems = uri.Query.Split('&');
-            string id = "";
-            if (queryItems.Length > 0 && !String.IsNullOrEmpty(queryItems[0])) {
-                foreach (var queryItem in queryItems) {
-                    var item = queryItem;
-                    if (item[0] == '?') item = item.Substring(1);
-                    if (item.Substring(0, 2).ToLowerInvariant() == "v=") {
-                        id = item.Substring(2);
-                        break;
-                    }
-                }
-            }
-            return id;
+            return parameters.ContainsKey("v") ? parameters["v"] : "";
         }
 
-        private static string GetPlaylistId(Uri uri)
+        private static string GetPlaylistId(Dictionary<string, string> parameters)
         {
-            var queryItems = uri.Query.Split('&');
-            var id = "";
-            if (queryItems.Length > 0 && !String.IsNullOrEmpty(queryItems[0])) {
-                foreach (var queryItem in queryItems) {
-                    var item = queryItem;
-                    if (item[0] == '?') item = item.Substring(1);
-                    if (item.Substring(0, 5).ToLowerInvariant() == "list=") {
-                        id = item.Substring(5);
-                        if (id.Substring(0, 2).ToLowerInvariant() == "pl") id = id.Substring(2);
-                        break;
-                    }
-                }
-            }
+            var id = parameters.ContainsKey("list") ? parameters["list"] : "";
+            if (id.Substring(0, 2).ToLowerInvariant() == "pl") id = id.Substring(2);
             return id;
         }
-
+        */
     }
 }

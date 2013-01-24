@@ -1,6 +1,10 @@
-﻿namespace ms.video.downloader.android.service.download
+﻿using System;
+using System.Threading;
+
+namespace ms.video.downloader.android.service.download
 {
     public delegate void ListDownloadStatusEventHandler(Feed list, Feed feed, DownloadState downloadState, double percentage);
+    public delegate void ListDownloadAvailableEventHandler(Feed list, YoutubeEntry feed, VideoInfo videoInfo, MediaType mediaType);
 
     public class DownloadList : Feed
     {
@@ -9,12 +13,13 @@
         private readonly int _poolSize;
 
         public ListDownloadStatusEventHandler OnListDownloadStatusChange;
+        public ListDownloadAvailableEventHandler OnListDownloadAvailable;
 
-        public DownloadList(MediaType mediaType, ListDownloadStatusEventHandler onDownloadStatusChange = null,
-                            int poolSize = 3)
+        public DownloadList(MediaType mediaType, ListDownloadStatusEventHandler onDownloadStatusChange = null, ListDownloadAvailableEventHandler onListDownloadAvailable = null, int poolSize = 3)
         {
             MediaType = mediaType;
             OnListDownloadStatusChange = onDownloadStatusChange;
+            OnListDownloadAvailable = onListDownloadAvailable;
             _ignoreDownloaded = false;
             _poolSize = poolSize;
         }
@@ -38,7 +43,12 @@
                 }
             UpdateStatus(DownloadState.AllStart, null, 0.0);
             _ignoreDownloaded = ignoreDownloaded;
-            foreach (YoutubeEntry item in Entries) item.OnEntryDownloadStatusChange += OnDownloadStatusChanged;
+            foreach (YoutubeEntry item in Entries) {
+                item.OnEntryDownloadStatusChange += OnDownloadStatusChanged;
+                item.OnEntryDownloadAvailable += (feed, info, type) => {
+                    if (OnListDownloadAvailable != null) OnListDownloadAvailable(this, feed, info, type);
+                };
+            }
             DownloadFirst();
 
         }
@@ -95,7 +105,7 @@
             for (var i = 0; i < Entries.Count; i++) {
                 var entry = Entries[i] as YoutubeEntry;
                 if (entry == null || entry.DownloadState != DownloadState.Initialized || entry.DownloadState == DownloadState.Deleted) continue;
-                entry.DownloadAsync(MediaType, _ignoreDownloaded);
+                ThreadPool.QueueUserWorkItem(o => entry.DownloadAsync(MediaType, _ignoreDownloaded) );
                 break;
             }
         }

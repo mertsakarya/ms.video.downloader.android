@@ -5,7 +5,7 @@ using ms.video.downloader.android.service.download;
 
 namespace ms.video.downloader.android.service
 {
-    public class LocalService
+    public class Settings
     {
         private readonly ApplicationConfiguration _configuration;
 
@@ -16,7 +16,7 @@ namespace ms.video.downloader.android.service
         public Guid Guid { get { return _configuration.Guid; } }
         public bool FirstTime { get; private set; }
 
-        public LocalService()
+        public Settings()
         {
             FirstTime = false;
             Version = "0.0.0.1";

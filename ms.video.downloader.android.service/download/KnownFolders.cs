@@ -36,7 +36,7 @@ namespace ms.video.downloader.android.service.download
         {
             try {
                 return File.OpenWrite(ToString());
-            } catch(IOException) { //File is opened/locked by another process
+            } catch(IOException ex) { //File is opened/locked by another process
                 return null;
             }
         }
@@ -46,7 +46,9 @@ namespace ms.video.downloader.android.service.download
     {
         private static StorageFolder GetStorageFolder(string folderName)
         {
-            var desktop = new StorageFolder { FolderName = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) };
+            //var folder = Environment.GetExternalStoragePublicDirectory(Environment.DirectoryDownloads).AbsolutePath;
+            var folder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var desktop = new StorageFolder { FolderName = folder };
             var sf = DownloadHelper.GetFolder(desktop, "MS.Video.Downloader");
             return DownloadHelper.GetFolder(sf, folderName);
         }

@@ -17,13 +17,12 @@ namespace ms.video.downloader.android.service.download
         public static IEnumerable<VideoInfo> GetDownloadUrlsAsync(Uri videoUri)
         {
             if (videoUri == null) throw new ArgumentNullException("videoUri");
-
-            var videoUrl = NormalizeYoutubeUrl(videoUri.ToString());
-            var id = YoutubeUrl.GetVideoId(new Uri(videoUrl));
-            var pageSource = GetPageSourceAsync(videoUrl);
-            if (IsVideoUnavailable(pageSource)) throw new Exception("Video not available");
+            var id = YoutubeUrl.Create(videoUri).VideoId;
+            //var videoUrl = NormalizeYoutubeUrl(videoUri.ToString());
+            //var pageSource = GetPageSourceAsync(videoUrl);
+            //if (IsVideoUnavailable(pageSource)) throw new Exception("Video not available");
             var requestUrl = String.Format("http://www.youtube.com/get_video_info?&video_id={0}&el=detailpage&ps=default&eurl=&gl=US&hl=en", id);
-            var source = GetPageSourceAsync(requestUrl);
+            var source = DownloadToStringAsync(new Uri(requestUrl));
             try {
                 var videoInfos = GetVideoInfos(source);
                 return videoInfos;
@@ -37,21 +36,22 @@ namespace ms.video.downloader.android.service.download
         #region GetDownloadUrlsAsync helpers
         private static IEnumerable<VideoInfo> GetVideoInfos(string source)
         {
+            if (String.IsNullOrEmpty(source)) return new List<VideoInfo>();
             var t = GetParams(source); 
-            var videoTitle = t["title"];
-            var splitByUrl = t["url_encoded_fmt_stream_map"];
+            var videoTitle = GetKeyValue(t, "title");
+            var splitByUrl = GetKeyValue(t, "url_encoded_fmt_stream_map");
             if(String.IsNullOrWhiteSpace(splitByUrl)) return new List<VideoInfo>();
             var splitByUrls = splitByUrl.Split(',');
             var videoInfos = new List<VideoInfo>();
             foreach (var s in splitByUrls) {
                 var queries = GetParams(s);
-                var url = queries["url"];
+                var url = GetKeyValue(queries, "url");
                 if(url == null) continue;
                 var decoder = GetParams(url.Substring(url.IndexOf('?')));
                 byte formatCode;
-                if (!Byte.TryParse(decoder["itag"], out formatCode)) continue;
-                var fallbackHost = Uri.UnescapeDataString(queries["fallback_host"]);
-                var sig = Uri.UnescapeDataString(queries["sig"]);
+                if (!Byte.TryParse(GetKeyValue(decoder, "itag"), out formatCode)) continue;
+                var fallbackHost = Uri.UnescapeDataString(GetKeyValue(queries, "fallback_host"));
+                var sig = Uri.UnescapeDataString(GetKeyValue(queries, "sig"));
                 foreach (var videoInfoDefault in VideoInfo.Defaults) {
                     if (videoInfoDefault.FormatCode == formatCode) {
                         var info = videoInfoDefault.Clone();
@@ -65,8 +65,14 @@ namespace ms.video.downloader.android.service.download
             return videoInfos;
         }
 
-        private static Dictionary<string, string> GetParams(string uri)
+        private static string GetKeyValue(Dictionary<string, string> t, string key)
         {
+            return t.ContainsKey(key) ? t[key] : "";
+        }
+
+        public static Dictionary<string, string> GetParams(string uri)
+        {
+            uri = uri.Replace('+', ' ');
             var matches = Regex.Matches(uri, @"[\?&](([^&=]+)=([^&=#]*))", RegexOptions.Compiled);
             return matches.Cast<Match>().ToDictionary(
                 m => Uri.UnescapeDataString(m.Groups[2].Value),
@@ -74,47 +80,9 @@ namespace ms.video.downloader.android.service.download
             );
         }
 
-        private static string GetPageSourceAsync(string videoUrl)
-        {
-            return DownloadToStringAsync(new Uri(videoUrl));
-        }
-
-        private static bool IsVideoUnavailable(string pageSource)
-        {
-            return pageSource.Contains("<div id=\"watch-player-unavailable\">");
-        }
-
-        private static string NormalizeYoutubeUrl(string url)
-        {
-            url = url.Trim();
-
-            if (url.StartsWith("https://")) {
-                url = "http://" + url.Substring(8);
-            } else if (!url.StartsWith("http://")) {
-                url = "http://" + url;
-            }
-
-            url = url.Replace("youtu.be/", "youtube.com/watch?v=");
-            url = url.Replace("www.youtube.com", "youtube.com");
-
-            if (url.StartsWith("http://youtube.com/v/")) {
-                url = url.Replace("youtube.com/v/", "youtube.com/watch?v=");
-            } else if (url.StartsWith("http://youtube.com/watch#")) {
-                url = url.Replace("youtube.com/watch#", "youtube.com/watch?");
-            }
-
-            if (!url.StartsWith("http://youtube.com/watch")) {
-                throw new ArgumentException("URL is not a valid youtube URL!");
-            }
-
-            return url;
-        }
-
         private static void ThrowYoutubeParseException(Exception innerException)
         {
-            throw new Exception("Could not parse the Youtube page.\n" +
-                                            "This may be due to a change of the Youtube page structure.\n" +
-                                            "Please report this bug at www.github.com/flagbug/YoutubeExtractor/issues", innerException);
+            throw new Exception("Could not parse the Youtube page.\nThis may be due to a change of the Youtube page structure.\nPlease report this bug at www.github.com/flagbug/YoutubeExtractor/issues", innerException);
         }
         #endregion
         
@@ -122,7 +90,7 @@ namespace ms.video.downloader.android.service.download
         public static StorageFolder GetFolder(StorageFolder baseFolder, string folderName)
         {
             if (!Directory.Exists(baseFolder.ToString())) Directory.CreateDirectory(baseFolder.ToString());
-            var path = baseFolder + "\\" + folderName;
+            var path = baseFolder + "/" + folderName;
             if(!Directory.Exists(path)) Directory.CreateDirectory(path);
             return new StorageFolder(path);
         }
@@ -181,8 +149,7 @@ namespace ms.video.downloader.android.service.download
         private static ResponseContentRange GetRange(HttpWebResponse response)
         {
             var rangeHeader = response.Headers["Content-Range"];
-            var range = new ResponseContentRange();
-            range.ContentLength = response.ContentLength;
+            var range = new ResponseContentRange {ContentLength = response.ContentLength};
             if (rangeHeader == null || rangeHeader.Length <= 6 || !rangeHeader.StartsWith("bytes ")) return range;
             rangeHeader = rangeHeader.Substring(6);
             var posStart = rangeHeader.IndexOf('-');
@@ -210,6 +177,7 @@ namespace ms.video.downloader.android.service.download
         public static byte[] DownloadToByteArrayAsync(Uri uri, Encoding encoding = null)
         {
             var response = DownloadToStreamAsync(uri);
+            if (response == null) return new byte[0];
             using (var stream = response.GetResponseStream()) {
                 if (stream == null) return new byte[0];
                 using (var destinationStream = new MemoryStream()) {
@@ -220,7 +188,7 @@ namespace ms.video.downloader.android.service.download
                 }
             }
         }
-        
+
         public static void CopyStream(Stream input, Stream output)
         {
             var buffer = new byte[32768];
@@ -238,8 +206,7 @@ namespace ms.video.downloader.android.service.download
             try {
                 var response = req.GetResponse() as HttpWebResponse;
                 return response;
-            }
-            catch(WebException ex) {
+            } catch(WebException ex) {
                 return ex.Response as HttpWebResponse;
             }
         }

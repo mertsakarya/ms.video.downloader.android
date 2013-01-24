@@ -5,13 +5,15 @@ namespace ms.video.downloader.android.service.download
 {
     public class DownloadLists : Feed
     {
-        private readonly LocalService _settings;
+        private readonly Settings _settings;
         private readonly ListDownloadStatusEventHandler _onStatusChanged;
+        private readonly ListDownloadAvailableEventHandler _onDownloadAvailable;
 
-        public DownloadLists(LocalService settings, ListDownloadStatusEventHandler onStatusChanged)
+        public DownloadLists(Settings settings, ListDownloadStatusEventHandler onStatusChanged, ListDownloadAvailableEventHandler onDownloadAvailable)
         {
             _settings = settings;
             _onStatusChanged = onStatusChanged;
+            _onDownloadAvailable = onDownloadAvailable;
             if (_settings.FillDownloadLists(this) && Entries.Count > 0) StartDownload(); else Entries.Clear();
         }
 
@@ -24,7 +26,9 @@ namespace ms.video.downloader.android.service.download
 
         public DownloadList SoftAdd(IEnumerable entries, MediaType mediaType)
         {
-            var downloadList = new DownloadList(mediaType, OnDownloadStatusChange);
+            var downloadList = new DownloadList(mediaType, OnDownloadStatusChange, (list, feed, info, type) => {
+                if (_onDownloadAvailable != null) _onDownloadAvailable(list, feed, info, type);
+            });
             foreach (var member in entries.Cast<YoutubeEntry>().Where(member => member.Uri != null)) downloadList.Entries.Add(member.Clone());
             if (downloadList.Entries.Count > 0) Entries.Add(downloadList);
             return downloadList;

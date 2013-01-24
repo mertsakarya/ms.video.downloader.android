@@ -1,14 +1,15 @@
-MS.Youtube.Playlist.Downloader
-==============================
+ms.video.downloader
+===================
 
-Youtube Downloader and audio converter
+Youtube Video Downloader for Android
 --------------------------------------
 	
 This application is for downloading multiple videos from Youtube. You can download videos and extract MP3 audio files from them. You can download all video on playlists and extract them to MP3 with few clicks.
 
 You can use this application to download individual videos and playlists, extract MP3 from videos, and browse Youtube.
 
-The binaries can be found at http://www.mertsakarya.com/MS.Youtube.Downloader/
+The binaries for Windows can be found at http://www.mertsakarya.com/ms.youtube.downloader/
+And the source sode for Windows can be found at https://github.com/mertsakarya/MS.Youtube.Playlist.Downloader
 
 Notes about installation
 ------------------------
